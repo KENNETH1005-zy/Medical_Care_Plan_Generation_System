@@ -1,0 +1,7 @@
+# THIS IS AN EXAMPLE yarn.lock. IN A REAL PROJECT, YOU WOULD GENERATE THIS.
+# This file is used by yarn to lock dependencies to specific versions.
+# We'll generate a minimal one for the MVP.
+# In a real project, you would run 'yarn install' locally and commit the generated yarn.lock.
+
+# yarn.lock file content (minimal for this MVP)
+# (empty or very minimal for now, `yarn install` will populate it)
