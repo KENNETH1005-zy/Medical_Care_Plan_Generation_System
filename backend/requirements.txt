@@ -5,3 +5,4 @@ psycopg2-binary==2.9.9
 dj_database_url==1.0.0
 anthropic==0.23.1
 django-cors-headers==4.3.1
+httpx==0.27.2

@@ -7,6 +7,7 @@ from decouple import config
 import anthropic # 导入 anthropic 库
 import time # 用于模拟异步处理
 
+
 class CarePlanViewSet(viewsets.ModelViewSet):
     queryset = CarePlan.objects.all().order_by('-created_at')
     serializer_class = CarePlanSerializer
@@ -40,7 +41,7 @@ class CarePlanViewSet(viewsets.ModelViewSet):
             prompt_template = f"请根据以下患者信息生成一份详细的护理计划：\n\n患者信息：{patient_info}\n\n护理计划："
 
             message = client.messages.create(
-                model="claude-3-opus-20240229", # 或者其他你可用的 Claude 模型
+                model="claude-3-haiku-20240307",
                 max_tokens=1024,
                 messages=[
                     {"role": "user", "content": prompt_template}
@@ -68,3 +69,11 @@ class CarePlanViewSet(viewsets.ModelViewSet):
             return Response(serializer.data)
         except CarePlan.DoesNotExist:
             return Response({'error': 'Care plan not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+    @action(detail=True, methods=['get'])
+    def download(self, request, pk=None):
+        care_plan = self.get_object()
+        serializer = self.get_serializer(care_plan)
+        response = Response(serializer.data, status=status.HTTP_200_OK)
+        response['Content-Disposition'] = f'attachment; filename="careplan_{care_plan.id}.json"'
+        return response
