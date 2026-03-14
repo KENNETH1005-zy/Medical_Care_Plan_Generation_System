@@ -30,6 +30,8 @@ services:
       DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
       REDIS_URL: ${REDIS_URL}
+      CELERY_BROKER_URL: ${CELERY_BROKER_URL}
+      CELERY_RESULT_BACKEND: ${CELERY_RESULT_BACKEND}
     depends_on:
       db:
         condition: service_healthy
@@ -53,6 +55,25 @@ services:
     image: redis:7-alpine
     ports:
       - "6379:6379"
+
+  celery:
+    build: ./backend
+    command: celery -A medical_care_plan_system worker -l info
+    volumes:
+      - ./backend:/app
+    environment:
+      DJANGO_SETTINGS_MODULE: medical_care_plan_system.settings
+      DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+      DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+      REDIS_URL: ${REDIS_URL}
+      CELERY_BROKER_URL: ${CELERY_BROKER_URL}
+      CELERY_RESULT_BACKEND: ${CELERY_RESULT_BACKEND}
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
 
 volumes:
   postgres_data:

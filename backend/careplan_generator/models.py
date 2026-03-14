@@ -20,9 +20,17 @@ class Doctor(models.Model):
 
 
 class Order(models.Model):
+    STATUS_CHOICES = [
+        ("PENDING", "Pending"),
+        ("PROCESSING", "Processing"),
+        ("COMPLETED", "Completed"),
+        ("FAILED", "Failed"),
+    ]
+
     patient = models.ForeignKey(Patient, on_delete=models.CASCADE, related_name="orders")
     doctor = models.ForeignKey(Doctor, on_delete=models.SET_NULL, null=True, blank=True, related_name="orders")
     note = models.TextField(blank=True, null=True)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="PENDING")
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):

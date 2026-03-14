@@ -3,8 +3,7 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from .models import CarePlan, Doctor, Order, Patient
 from .serializers import CarePlanSerializer
-from decouple import config
-import redis
+from .tasks import generate_careplan_task
 
 
 class CarePlanViewSet(viewsets.ModelViewSet):
@@ -27,12 +26,10 @@ class CarePlanViewSet(viewsets.ModelViewSet):
         if doctor_name or doctor_email:
             doctor = Doctor.objects.create(name=doctor_name or "Unknown Doctor", email=doctor_email)
 
-        order = Order.objects.create(patient=patient, doctor=doctor, note=patient_info)
+        order = Order.objects.create(patient=patient, doctor=doctor, note=patient_info, status="PENDING")
 
         care_plan = CarePlan.objects.create(order=order, status="PENDING")
-        redis_url = config("REDIS_URL", default="redis://redis:6379/0")
-        redis_client = redis.from_url(redis_url)
-        redis_client.rpush("careplan_queue", care_plan.id)
+        generate_careplan_task.delay(care_plan.id)
 
         return Response(
             {"message": "Care plan received.", "careplan_id": care_plan.id, "status": care_plan.status},
