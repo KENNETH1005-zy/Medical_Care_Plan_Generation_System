@@ -4,8 +4,7 @@ from rest_framework.response import Response
 from .models import CarePlan, Doctor, Order, Patient
 from .serializers import CarePlanSerializer
 from decouple import config
-import anthropic # 导入 anthropic 库
-import time # 用于模拟异步处理
+import redis
 
 
 class CarePlanViewSet(viewsets.ModelViewSet):
@@ -31,40 +30,14 @@ class CarePlanViewSet(viewsets.ModelViewSet):
         order = Order.objects.create(patient=patient, doctor=doctor, note=patient_info)
 
         care_plan = CarePlan.objects.create(order=order, status="PENDING")
-        care_plan.status = "PROCESSING"
-        care_plan.save()
+        redis_url = config("REDIS_URL", default="redis://redis:6379/0")
+        redis_client = redis.from_url(redis_url)
+        redis_client.rpush("careplan_queue", care_plan.id)
 
-        try:
-            anthropic_api_key = config("ANTHROPIC_API_KEY")
-            if not anthropic_api_key:
-                raise ValueError("ANTHROPIC_API_KEY is not configured.")
-
-            client = anthropic.Anthropic(api_key=anthropic_api_key)
-
-            prompt_template = (
-                "Generate a detailed care plan based on the patient information below.\n\n"
-                f"Patient information: {patient_info}\n\n"
-                "Care plan:"
-            )
-
-            message = client.messages.create(
-                model="claude-3-haiku-20240307",
-                max_tokens=1024,
-                messages=[{"role": "user", "content": prompt_template}],
-            )
-            generated_text = message.content[0].text if message.content else "No care plan generated."
-
-            care_plan.care_plan_text = generated_text
-            care_plan.status = "COMPLETED"
-            care_plan.save()
-
-            return Response(self.get_serializer(care_plan).data, status=status.HTTP_201_CREATED)
-
-        except Exception as e:
-            care_plan.status = "FAILED"
-            care_plan.care_plan_text = f"Failed to generate care plan: {str(e)}"
-            care_plan.save()
-            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        return Response(
+            {"message": "Care plan received.", "careplan_id": care_plan.id, "status": care_plan.status},
+            status=status.HTTP_202_ACCEPTED,
+        )
 
     @action(detail=True, methods=['get'])
     def status(self, request, pk=None):
