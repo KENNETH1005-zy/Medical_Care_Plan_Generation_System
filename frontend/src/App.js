@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 
 const apiBaseUrl = process.env.REACT_APP_API_URL || "http://localhost:8000";
 
@@ -9,6 +9,7 @@ function App() {
   const [carePlanText, setCarePlanText] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
+  const pollIntervalRef = useRef(null);
 
   const canSubmit = useMemo(() => patientInfo.trim().length > 0 && !isSubmitting, [
     patientInfo,
@@ -16,6 +17,10 @@ function App() {
   ]);
 
   const resetResult = () => {
+    if (pollIntervalRef.current) {
+      clearInterval(pollIntervalRef.current);
+      pollIntervalRef.current = null;
+    }
     setCarePlanId(null);
     setStatus(null);
     setCarePlanText("");
@@ -38,9 +43,9 @@ function App() {
       }
 
       const data = await response.json();
-      setCarePlanId(data.id);
+      setCarePlanId(data.careplan_id);
       setStatus(data.status);
-      setCarePlanText(data.care_plan_text || "");
+      setCarePlanText("");
     } catch (error) {
       setErrorMessage(error.message);
     } finally {
@@ -48,22 +53,54 @@ function App() {
     }
   };
 
-  const handleRefreshStatus = async () => {
-    if (!carePlanId) return;
+  const handleRefreshStatus = async (idOverride) => {
+    const targetId = idOverride || carePlanId;
+    if (!targetId) return;
     setErrorMessage("");
     try {
-      const response = await fetch(`${apiBaseUrl}/api/careplans/${carePlanId}/status/`);
+      const response = await fetch(`${apiBaseUrl}/api/careplan/${targetId}/status/`);
       if (!response.ok) {
         const payload = await response.json().catch(() => ({}));
         throw new Error(payload.error || "Failed to fetch status.");
       }
       const data = await response.json();
       setStatus(data.status);
-      setCarePlanText(data.care_plan_text || "");
+
+      if (data.status === "COMPLETED") {
+        setCarePlanText(data.content || "");
+        if (pollIntervalRef.current) {
+          clearInterval(pollIntervalRef.current);
+          pollIntervalRef.current = null;
+        }
+      } else if (data.status === "FAILED") {
+        setErrorMessage("Care plan generation failed.");
+        if (pollIntervalRef.current) {
+          clearInterval(pollIntervalRef.current);
+          pollIntervalRef.current = null;
+        }
+      }
     } catch (error) {
       setErrorMessage(error.message);
     }
   };
+
+  useEffect(() => {
+    if (!carePlanId) return;
+    if (pollIntervalRef.current) {
+      clearInterval(pollIntervalRef.current);
+    }
+    handleRefreshStatus(carePlanId);
+    pollIntervalRef.current = setInterval(() => {
+      handleRefreshStatus(carePlanId);
+    }, 3000);
+
+    return () => {
+      if (pollIntervalRef.current) {
+        clearInterval(pollIntervalRef.current);
+        pollIntervalRef.current = null;
+      }
+    };
+  }, [carePlanId]);
 
   return (
     <div style={{ padding: "24px", fontFamily: "Arial, sans-serif", maxWidth: "800px" }}>
@@ -81,7 +118,7 @@ function App() {
         <button type="button" onClick={handleGenerate} disabled={!canSubmit}>
           {isSubmitting ? "生成中..." : "生成护理计划"}
         </button>
-        <button type="button" onClick={handleRefreshStatus} disabled={!carePlanId}>
+        <button type="button" onClick={() => handleRefreshStatus()} disabled={!carePlanId}>
           刷新状态
         </button>
       </div>

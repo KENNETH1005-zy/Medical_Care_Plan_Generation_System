@@ -1,5 +1,5 @@
 from rest_framework import viewsets, status
-from rest_framework.decorators import action
+from rest_framework.decorators import action, api_view
 from rest_framework.response import Response
 from .models import CarePlan, Doctor, Order, Patient
 from .serializers import CarePlanSerializer
@@ -52,3 +52,16 @@ class CarePlanViewSet(viewsets.ModelViewSet):
         response = Response(serializer.data, status=status.HTTP_200_OK)
         response['Content-Disposition'] = f'attachment; filename="careplan_{care_plan.id}.json"'
         return response
+
+
+@api_view(["GET"])
+def careplan_status(request, careplan_id):
+    try:
+        care_plan = CarePlan.objects.get(id=careplan_id)
+    except CarePlan.DoesNotExist:
+        return Response({"error": "Care plan not found."}, status=status.HTTP_404_NOT_FOUND)
+
+    payload = {"status": care_plan.status}
+    if care_plan.status == "COMPLETED":
+        payload["content"] = care_plan.care_plan_text or ""
+    return Response(payload, status=status.HTTP_200_OK)
