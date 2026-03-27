@@ -25,3 +25,11 @@ class CarePlanSerializer(serializers.ModelSerializer):
         model = CarePlan
         fields = "__all__"
         read_only_fields = ("care_plan_text", "status", "created_at", "updated_at")
+
+
+class GenerateCarePlanSerializer(serializers.Serializer):
+    patient_info = serializers.CharField(required=True, allow_blank=False)
+    patient_name = serializers.CharField(required=False, allow_blank=True)
+    patient_email = serializers.CharField(required=False, allow_blank=True)
+    doctor_name = serializers.CharField(required=False, allow_blank=True)
+    doctor_email = serializers.CharField(required=False, allow_blank=True)

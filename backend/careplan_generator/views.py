@@ -1,9 +1,9 @@
 from rest_framework import viewsets, status
 from rest_framework.decorators import action, api_view
 from rest_framework.response import Response
-from .models import CarePlan, Doctor, Order, Patient
-from .serializers import CarePlanSerializer
-from .tasks import generate_careplan_task
+from .models import CarePlan
+from .serializers import CarePlanSerializer, GenerateCarePlanSerializer
+from .services import create_careplan_and_enqueue, get_careplan_status_payload
 
 
 class CarePlanViewSet(viewsets.ModelViewSet):
@@ -12,24 +12,11 @@ class CarePlanViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=["post"])
     def generate(self, request):
-        patient_info = request.data.get("patient_info")
-        if not patient_info:
+        serializer = GenerateCarePlanSerializer(data=request.data)
+        if not serializer.is_valid():
             return Response({"error": "Patient information is required."}, status=status.HTTP_400_BAD_REQUEST)
 
-        patient_name = request.data.get("patient_name") or "Unknown Patient"
-        patient_email = request.data.get("patient_email")
-        doctor_name = request.data.get("doctor_name")
-        doctor_email = request.data.get("doctor_email")
-
-        patient = Patient.objects.create(name=patient_name, email=patient_email)
-        doctor = None
-        if doctor_name or doctor_email:
-            doctor = Doctor.objects.create(name=doctor_name or "Unknown Doctor", email=doctor_email)
-
-        order = Order.objects.create(patient=patient, doctor=doctor, note=patient_info, status="PENDING")
-
-        care_plan = CarePlan.objects.create(order=order, status="PENDING")
-        generate_careplan_task.delay(care_plan.id)
+        care_plan = create_careplan_and_enqueue(serializer.validated_data)
 
         return Response(
             {"message": "Care plan received.", "careplan_id": care_plan.id, "status": care_plan.status},
@@ -57,11 +44,23 @@ class CarePlanViewSet(viewsets.ModelViewSet):
 @api_view(["GET"])
 def careplan_status(request, careplan_id):
     try:
-        care_plan = CarePlan.objects.get(id=careplan_id)
+        payload = get_careplan_status_payload(careplan_id)
     except CarePlan.DoesNotExist:
         return Response({"error": "Care plan not found."}, status=status.HTTP_404_NOT_FOUND)
 
-    payload = {"status": care_plan.status}
-    if care_plan.status == "COMPLETED":
-        payload["content"] = care_plan.care_plan_text or ""
     return Response(payload, status=status.HTTP_200_OK)
+
+
+@api_view(["POST"])
+def create_order(request):
+    serializer = GenerateCarePlanSerializer(data=request.data)
+    if not serializer.is_valid():
+        return Response({"error": "Patient information is required."}, status=status.HTTP_400_BAD_REQUEST)
+
+    care_plan = create_careplan_and_enqueue(serializer.validated_data)
+    order = care_plan.order
+
+    return Response(
+        {"message": "Order received.", "order_id": order.id, "careplan_id": care_plan.id, "status": care_plan.status},
+        status=status.HTTP_202_ACCEPTED,
+    )
